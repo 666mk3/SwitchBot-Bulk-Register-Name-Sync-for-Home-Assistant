@@ -1,0 +1,20 @@
+name: "SwitchBot Bulk Register & Name Sync"
+description: "SwitchBotクラウドの名前を使用して、HAのデバイスを一括登録・名称同期します"
+version: "1.1.5"
+slug: "switchbot_bulk_register"
+startup: once
+init: false
+arch:
+  - armv7
+  - aarch64
+  - amd64
+options:
+  switchbot_token: ""
+  switchbot_secret: ""
+schema:
+  switchbot_token: str
+  switchbot_secret: str
+homeassistant_api: true
+hassio_api: true
+hassio_role: admin
+panel_icon: mdi:sync-alert
