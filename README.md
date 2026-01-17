@@ -31,6 +31,7 @@ SwitchBotクラウドに登録されているデバイス情報を取得し、Ho
 アドオンの「設定」タブで以下を入力してください：
 
 `switchbot_token`  SwitchBotアプリから取得したトークン 
+
 `switchbot_secret` SwitchBotアプリから取得したシークレット 
 
 ## 使い方
