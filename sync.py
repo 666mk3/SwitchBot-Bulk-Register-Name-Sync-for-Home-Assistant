@@ -8,12 +8,17 @@ import time
 import uuid
 import asyncio
 import websockets
+import sys
 
 # Configuration
 OPTIONS_FILE = "/data/options.json"
 HA_WS_URL = "ws://supervisor/core/websocket"
 HA_API_BASE = "http://supervisor/core/api"
 SUPERVISOR_TOKEN = os.getenv("SUPERVISOR_TOKEN")
+
+# Print helper to ensure flushing
+def log(msg):
+    print(msg, flush=True)
 
 def get_switchbot_headers(token, secret):
     t = str(int(round(time.time() * 1000)))
@@ -58,7 +63,7 @@ async def ws_command(websocket, command, **kwargs):
             if response.get("id") == msg_id:
                 return response
         except Exception as e:
-            print(f"WS受信エラー: {e}")
+            log(f"WS受信エラー: {e}")
             return None
 
 async def get_ha_flows_ws():
@@ -66,7 +71,7 @@ async def get_ha_flows_ws():
         async with websockets.connect(HA_WS_URL) as websocket:
             await websocket.recv() # auth required
             if not await ws_auth(websocket):
-                print("WS認証失敗")
+                log("WS認証失敗")
                 return []
             
             res = await ws_command(websocket, "config_entries/flow/progress")
@@ -75,7 +80,7 @@ async def get_ha_flows_ws():
             else:
                 return []
     except Exception as e:
-        print(f"WSエラー(flows): {e}")
+        log(f"WSエラー(flows): {e}")
         return []
 
 async def get_ha_devices_ws():
@@ -92,7 +97,7 @@ async def get_ha_devices_ws():
             else:
                 return []
     except Exception as e:
-        print(f"WSエラー(devices): {e}")
+        log(f"WSエラー(devices): {e}")
         return []
 
 async def update_device_name_ws(device_id, new_name):
@@ -108,7 +113,7 @@ async def update_device_name_ws(device_id, new_name):
                                    name_by_user=new_name)
             return res and res.get("success")
     except Exception as e:
-        print(f"WSエラー(update): {e}")
+        log(f"WSエラー(update): {e}")
         return False
 
 def register_flow_rest(flow_id):
@@ -123,12 +128,12 @@ def register_flow_rest(flow_id):
         return None
 
 async def main_async():
-    print("==================================================")
-    print("SwitchBot Bulk Register & Name Sync v1.1.6")
-    print("==================================================")
+    log("==================================================")
+    log("SwitchBot Sync v1.1.7 (Restored Backup)")
+    log("==================================================")
     
     if not SUPERVISOR_TOKEN:
-        print("エラー: SUPERVISOR_TOKENなし")
+        log("エラー: SUPERVISOR_TOKENなし")
         return
 
     # 1. Config
@@ -138,14 +143,14 @@ async def main_async():
         sb_token = opts.get("switchbot_token")
         sb_secret = opts.get("switchbot_secret")
         if not sb_token or not sb_secret:
-            print("エラー: SwitchBotトークン設定なし")
+            log("エラー: SwitchBotトークン設定なし")
             return
     except Exception as e:
-        print(f"エラー: 設定読み込み失敗: {e}")
+        log(f"エラー: オプションファイル読み込み失敗: {e}")
         return
 
     # 2. Get SwitchBot Devices
-    print("1. SwitchBotクラウド情報取得...")
+    log("1. SwitchBotクラウド情報取得...")
     mac_to_name = {}
     try:
         headers = get_switchbot_headers(sb_token, sb_secret)
@@ -158,65 +163,75 @@ async def main_async():
         for d in sb_data.get("body", {}).get("remoteInfraredCommands", []):
             mac = d["deviceId"].replace(":", "").lower()
             mac_to_name[mac] = d["deviceName"]
-        print(f"取得: {len(mac_to_name)} デバイス")
+        log(f"取得: {len(mac_to_name)} デバイス")
     except Exception as e:
-        print(f"SwitchBot APIエラー: {e}")
+        log(f"SwitchBot APIエラー: {e}")
         return
 
     # 3. Rename Existing Devices
-    print("2. 既存デバイスの名前同期をチェック...")
+    log("2. 既存デバイスの名前同期をチェック...")
     ha_devices = await get_ha_devices_ws()
-    print(f"HAデバイス総数: {len(ha_devices)}")
+    log(f"HAデバイス総数: {len(ha_devices)}")
     synced_count = 0
     
-    if ha_devices:
-        print("--- DEBUG: 識別子チェック (最初の3件) ---")
-        for i, dev in enumerate(ha_devices[:3]):
-            print(f"  [{i}] {dev.get('name')} : {dev.get('identifiers')}")
-        print("---------------------------------------")
-
+    # デバッグ: 全デバイスの識別情報を確認
+    log("--- DEBUG: 全デバイスの識別子 ---")
+    
     for device in ha_devices:
-        identifiers = device.get("identifiers", [])
         target_mac = None
+        identifiers = device.get("identifiers", [])
+        connections = device.get("connections", [])
         
-        # 識別子チェック
+        # 1. identifiers から探す
         for id_tuple in identifiers:
-            if len(id_tuple) >= 2:
-                domain = str(id_tuple[0]).lower()
-                val = str(id_tuple[1]).replace(":", "").lower()
-                
-                if "switchbot" in domain:
-                    target_mac = val
-                    break
-        
-        if target_mac and target_mac in mac_to_name:
-            cloud_name = mac_to_name[target_mac]
-            current_name = device.get("name_by_user") or device.get("name")
+            for item in id_tuple:
+                if isinstance(item, str):
+                    clean = item.replace(":", "").lower()
+                    if len(clean) == 12 and clean in mac_to_name:
+                        target_mac = clean
+                        break
+            if target_mac: break
             
-            # デバッグ: 名前が一致しない場合のみログ
-            if current_name != cloud_name:
-                print(f"更新同期: {current_name} -> {cloud_name} (MAC: {target_mac})")
+        # 2. connections から探す (MACアドレスはここにあることが多い)
+        if not target_mac:
+            for conn_tuple in connections:
+                for item in conn_tuple:
+                    if isinstance(item, str):
+                        clean = item.replace(":", "").lower()
+                        if len(clean) == 12 and clean in mac_to_name:
+                            target_mac = clean
+                            break
+                if target_mac: break
+        
+        # デバッグログ出力
+        dev_name = device.get("name_by_user") or device.get("name")
+        if target_mac:
+            log(f"🔍 発見: {dev_name} -> MAC:{target_mac} (クラウド名:{mac_to_name[target_mac]})")
+            
+            cloud_name = mac_to_name[target_mac]
+            if dev_name != cloud_name:
+                log(f"  ⚡ 更新実行: {dev_name} -> {cloud_name}")
                 success = await update_device_name_ws(device["id"], cloud_name)
                 if success:
-                    print(f"  ✅ 成功")
+                    log(f"    ✅ 成功")
                     synced_count += 1
                 else:
-                    print(f"  ❌ 失敗")
+                    log(f"    ❌ 失敗")
             else:
-                # 既に一致しているのでスキップ
-                pass
+                log(f"  ✅ 名前一致済み")
                 
-    print(f"完了: {synced_count} 台の名前を同期しました。")
+    log("---------------------------------------")
+    log(f"完了: {synced_count} 台の名前を同期しました。")
 
     # 4. Register New Flows
-    print("3. 新規デバイスの自動登録...")
+    log("3. 新規デバイスの自動登録...")
     flows = await get_ha_flows_ws()
     registered_count = 0
     
     # ハンドラー名（デバッグ用）
     if flows:
         handlers = list(set([str(f.get("handler")) for f in flows]))
-        print(f"検出されたハンドラー: {handlers}")
+        log(f"検出されたハンドラー: {handlers}")
 
     for flow in flows:
         handler = flow.get("handler")
@@ -230,7 +245,7 @@ async def main_async():
         
         if unique_id in mac_to_name:
             cloud_name = mac_to_name[unique_id]
-            print(f"新規登録: {unique_id} -> {cloud_name}")
+            log(f"新規登録: {unique_id} -> {cloud_name}")
             
             res = register_flow_rest(flow_id)
             if res and res.status_code == 200:
@@ -238,7 +253,7 @@ async def main_async():
                 entry_id = result.get("result", {}).get("entry_id")
                 
                 if result.get("type") == "create_entry" and entry_id:
-                    print(f"  ✅ 登録成功。名前を即時適用します...")
+                    log(f"  ✅ 登録成功。名前を即時適用します...")
                     await asyncio.sleep(2) 
                     
                     # 再取得して更新
@@ -251,21 +266,26 @@ async def main_async():
                     
                     if target_device_id:
                         if await update_device_name_ws(target_device_id, cloud_name):
-                            print("  ✅ 名前適用完了")
+                            log("  ✅ 名前適用完了")
                         else:
-                             print("  ⚠️ 名前適用失敗")
+                            log("  ⚠️ 名前適用失敗")
                     else:
-                        print("  ⚠️ デバイス探索失敗")
+                        log("  ⚠️ デバイス探索失敗")
                     registered_count += 1
                 else:
-                    print(f"  情報: ステップ {result.get('step_id')}")
+                    log(f"  情報: ステップ {result.get('step_id')}")
             else:
                 code = res.status_code if res else "None"
-                print(f"  ❌ 登録リクエスト失敗 ({code})")
+                log(f"  ❌ 登録リクエスト失敗 ({code})")
     
-    print("==================================================")
-    print(f"全工程完了")
-    print("==================================================")
+    log("==================================================")
+    log(f"全工程完了")
+    log("==================================================")
 
 def main():
+    # 強制flush
+    sys.stdout.reconfigure(line_buffering=True)
     asyncio.run(main_async())
+
+if __name__ == "__main__":
+    main()
