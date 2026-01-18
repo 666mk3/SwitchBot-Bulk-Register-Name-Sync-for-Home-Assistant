@@ -124,7 +124,7 @@ def register_flow_rest(flow_id):
 
 async def main_async():
     print("==================================================")
-    print("SwitchBot Bulk Register & Name Sync v1.1.5 (FINAL)")
+    print("SwitchBot Bulk Register & Name Sync v1.1.6")
     print("==================================================")
     
     if not SUPERVISOR_TOKEN:
