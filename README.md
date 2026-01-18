@@ -37,6 +37,9 @@ SwitchBotクラウドに登録されているデバイス情報を取得し、Ho
 ### 設定
 アドオンの「設定」タブで以下を入力してください：
 
+<img width="1313" height="514" alt="image" src="https://github.com/user-attachments/assets/6bc106a3-4e23-4fca-8697-97a5800f211b" />
+
+
 `switchbot_token`  SwitchBotアプリから取得したトークン 
 
 `switchbot_secret` SwitchBotアプリから取得したシークレット 
