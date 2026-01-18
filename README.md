@@ -22,8 +22,15 @@ SwitchBotクラウドに登録されているデバイス情報を取得し、Ho
 
 ## インストール方法
 
+### GitHubリポジトリからインストールする場合
+1. Home Assistantの **設定** > **アドオン** > **アドオンストア** を開きます。
+2. 右上のメニュー（縦の三点リーダー）から **リポジトリ** を選択します。
+3. 以下のURLを入力して「追加」をクリックします：
+   `https://github.com/666mk3/SwitchBot-Bulk-Register-Name-Sync-for-Home-Assistant`
+4. ストアの画面を更新（再読み込み）し、リストに表示される「SwitchBot Bulk Register & Name Sync」を選択してインストールします。
+
 ### ローカルアドオンとしてインストールする場合
-1. Haome Assistantの `addons/` フォルダ（または `local_addons/`）に、このリポジトリのフィル一式を配置したフォルダ（例: `switchbot_bulk_register`）をコピーします。
+1. Home Assistantの `addons/` フォルダ（または `local_addons/`）に、このリポジトリのファイル一式を配置したフォルダ（例: `switchbot_bulk_register`）をコピーします。
 2. Home Assistantの設定 > アドオン > アドオンストア から、右上のメニューで「更新を確認」をクリックします。
 3. 「Local Add-ons」セクションに「SwitchBot Bulk Register & Name Sync」が表示されるのでインストールします。
 
