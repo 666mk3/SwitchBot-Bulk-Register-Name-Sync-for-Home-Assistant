@@ -140,7 +140,8 @@ async def main_async():
         if not sb_token or not sb_secret:
             print("エラー: SwitchBotトークン設定なし")
             return
-    except:
+    except Exception as e:
+        print(f"エラー: 設定読み込み失敗: {e}")
         return
 
     # 2. Get SwitchBot Devices
